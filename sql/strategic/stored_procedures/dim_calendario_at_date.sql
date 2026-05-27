@@ -1,4 +1,3 @@
-USE [dm_gestion_cartera]
 GO
 
 SET ANSI_NULLS ON
