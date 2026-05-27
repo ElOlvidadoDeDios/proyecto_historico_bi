@@ -1,0 +1,1 @@
+SELECT * FROM gc_avance_cartera;

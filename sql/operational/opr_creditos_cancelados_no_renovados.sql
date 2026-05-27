@@ -1,0 +1,1 @@
+SELECT * FROM gc_creditos_cancelados_no_renovados;

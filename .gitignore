@@ -1,0 +1,13 @@
+# Entornos
+.env
+.venv/
+__pycache__/
+
+# Editores
+.vscode/
+
+# Datos y Backups
+backup/
+*.csv
+*.xlsx
+*.bak

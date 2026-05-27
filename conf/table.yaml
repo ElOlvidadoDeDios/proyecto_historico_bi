@@ -1,0 +1,9 @@
+dim:
+  asesor: dim_asesor
+fct:
+  flow: fct_flow
+  stock: fct_stock
+opr:
+  creditos_cancelados_no_renovados: creditos_cancelados_no_renovados
+  ranking_asesor: ranking_asesor
+  avance_cartera: avance_cartera
