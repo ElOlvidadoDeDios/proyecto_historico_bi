@@ -88,11 +88,14 @@ SubjectOperational = Literal[
 ]
 
 
+# 1. Añade el parámetro 'periodo' a la firma de la función
 def pipeline(
-    domain: Domain, subject: SubjectStrategic | SubjectOperational, variant: Variant
+    domain: Domain,
+    subject: SubjectStrategic | SubjectOperational,
+    variant: Variant,
+    periodo: str = None,
 ) -> None:
 
-    # Preambule
     try:
         cfg: ConfigSubject = SUBJECTS[domain][subject]
     except KeyError as e:
@@ -105,8 +108,9 @@ def pipeline(
             f"No existe SUBJECT '{subject}' bajo dominio '{domain}'. Disponibles: {disponibles}"
         ) from e
 
-    # Extract
-    df_extracted = Extractor.run(cfg.sql)
+    # 2. PREPARA Y PASA EL PARÁMETRO AL EXTRACTOR
+    params = {"periodo": periodo} if periodo else None
+    df_extracted = Extractor.run(cfg.sql, params=params)
 
     # Transform
     transform = _get_transformer(cfg.transformer_key)
@@ -118,6 +122,13 @@ def pipeline(
     loader.run(df=df_transformed, table=cfg.table)
 
 
+# 3. Crea una nueva función orquestadora para la carga histórica
+def pipeline_historical(periodo: str) -> None:
+    pipeline("strategic", "dim_asesor", Variant.VARIATIONAL, periodo)
+    pipeline("strategic", "fct_stock", Variant.VARIATIONAL, periodo)
+    pipeline("strategic", "fct_flow", Variant.VARIATIONAL, periodo)
+
+
 def pipeline_initial() -> None:
     pipeline("strategic", "dim_asesor", Variant.INITIAL)
     pipeline("strategic", "fct_stock", Variant.INITIAL)
@@ -125,9 +136,11 @@ def pipeline_initial() -> None:
 
 
 def pipeline_variational() -> None:
-    pipeline("strategic", "dim_asesor", Variant.INITIAL)
-    pipeline("strategic", "fct_stock", Variant.INITIAL)
-    pipeline("strategic", "fct_flow", Variant.INITIAL)
+    # ANTES: Llamaba a Variant.INITIAL (reemplazaba todo)
+    # AHORA: Llama a la estrategia Variational (Añade el mes sin borrar la historia)
+    pipeline("strategic", "dim_asesor", Variant.VARIATIONAL)
+    pipeline("strategic", "fct_stock", Variant.VARIATIONAL)
+    pipeline("strategic", "fct_flow", Variant.VARIATIONAL)
 
 
 def pipeline_operational() -> None:

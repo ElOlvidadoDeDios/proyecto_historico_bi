@@ -8,6 +8,7 @@ from typing import Literal
 from gestion_cartera.core.config import ConfigManager
 from datetime import date
 
+
 # Producto
 class Loader(ABC):
 
@@ -18,18 +19,20 @@ class Loader(ABC):
 
 # Estrategias
 
+
 class StrategyLoaderStrategic(Loader, ABC):
 
-    engine = DatabaseConnection.get_engine('downstream')
-    
+    engine = DatabaseConnection.get_engine("downstream")
+
     @classmethod
     def run(cls, df: pd.DataFrame, table: str):
         pass
 
+
 class StrategyLoaderOperational(Loader, ABC):
 
     # TODO Especificar especifica obtencion de 'engine'
-    
+
     @classmethod
     def run(cls, df: pd.DataFrame, table: str):
         pass
@@ -37,11 +40,12 @@ class StrategyLoaderOperational(Loader, ABC):
 
 # Productos/Estrategias concretas
 
+
 class LoaderStrategicInitial(StrategyLoaderStrategic):
 
     @classmethod
     def run(cls, df: pd.DataFrame, table: str):
-        df.to_sql(table, con=cls.engine, if_exists='replace', index=False)
+        df.to_sql(table, con=cls.engine, if_exists="replace", index=False)
         cls.engine.dispose()
 
 
@@ -49,18 +53,28 @@ class LoaderStrategicVariational(StrategyLoaderStrategic):
 
     @classmethod
     def run(cls, df: pd.DataFrame, table: str):
+        # 1. Obtenemos el periodo o periodos EXACTOS que vienen en los datos
+        if "Periodo" not in df.columns:
+            raise ValueError(
+                f"Falta la columna 'Periodo' en el DataFrame para actualizar la tabla {table}."
+            )
 
-        period = date.today().strftime("%Y%m")
+        periodos_en_datos = df["Periodo"].unique()
 
         with cls.engine.begin() as conn:
-            conn.execute(
-                text(f"DELETE FROM {table} WHERE Periodo = :periodo"),
-                {'periodo': period},
-            )
+            # 2. Borramos SOLO los meses que estamos a punto de insertar (evita duplicados)
+            for periodo in periodos_en_datos:
+                conn.execute(
+                    text(f"DELETE FROM {table} WHERE Periodo = :periodo"),
+                    {"periodo": str(periodo)},
+                )
+
+            # 3. Insertamos la data (manteniendo intactos los meses anteriores)
             df.to_sql(table, con=conn, if_exists="append", index=False)
 
 
 # Contextos
+
 
 class LoaderStrategic(StrategyLoaderStrategic):
 
@@ -81,13 +95,15 @@ class LoaderStrategic(StrategyLoaderStrategic):
 
 # Factory
 
-class BIType(Enum): # Types of business intelligence
-    strategic = 'strategic'
-    operational = 'operational'
+
+class BIType(Enum):  # Types of business intelligence
+    strategic = "strategic"
+    operational = "operational"
+
 
 class LoaderFactory:
     @staticmethod
-    def get_loader(bi_type: Literal['strategic', 'operational']) -> Loader:
+    def get_loader(bi_type: Literal["strategic", "operational"]) -> Loader:
         try:
             bi_type = BIType(bi_type)
         except ValueError:
@@ -99,7 +115,7 @@ class LoaderFactory:
             return LoaderOperational()
 
 
-if __name__ == '__main__':
-    loader_strategic = LoaderFactory.get_loader('strategic')
+if __name__ == "__main__":
+    loader_strategic = LoaderFactory.get_loader("strategic")
     loader_strategic.strategy = LoaderStrategicVariational
     loader_strategic.run(df, ConfigManager.table.fct.stock)
