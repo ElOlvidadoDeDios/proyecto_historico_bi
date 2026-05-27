@@ -8,11 +8,7 @@ class Extractor:
     @classmethod
     def run(cls, sql: str, params: dict = None) -> pd.DataFrame:
         engine = DatabaseConnection.get_engine("upstream")
-
-        # Envolvemos el sql en text() para que acepte parámetros de forma segura
         sql_query = text(sql)
-
-        # Le pasamos el diccionario de parámetros a pandas
         df = pd.read_sql(sql_query, engine, params=params)
         engine.dispose()
         return df

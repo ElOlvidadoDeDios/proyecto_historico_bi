@@ -1,108 +1,44 @@
---- ######################
---- NOTAS
---- ######################
-
---- ######################
---- PREAMBULO
---- ######################
-
---- **********************
---- CTEs
-WITH
---- **********************
-
---- ======================
-CTE_ASESOR AS (
---- ======================
-
-SELECT * FROM gc_dim_asesor 
-
---- ======================
-)
-,
---- ======================
-
---- ======================
-CTE_CARTERA_MORAS AS (
---- ======================
-
-SELECT * FROM gc_cartera_moras
-
---- ======================
-)
-,
---- ======================
-
---- ======================
-CTE_DURACION AS (
---- ======================
-
-SELECT * FROM gc_duracion
-
---- ======================
-)
-,
---- ======================
-
---- ======================
-CTE_TEA AS (
---- ======================
-
-SELECT * FROM gc_tea
-
---- ======================
+WITH CTE_ASESOR AS (
+    SELECT DISTINCT T_ANA.ID_USER AS IdSAsesor, T_ANA.ID_AGE AS IdSAgencia
+    FROM PREEC T_PRE
+    INNER JOIN SEGURIDAD.DBO.ANAREC T_ANA ON T_ANA.ID_ANAREC = T_PRE.ID_ANA AND T_ANA.FLAG_ANAREC = 'A'
+    WHERE T_PRE.PERIODO = :periodo AND T_PRE.SALDO_PRES > 0
 ),
---- ======================
-
---- ======================
+CTE_CARTERA_MORAS AS (
+    SELECT T_PRE.PERIODO, T_ANA.ID_USER AS IdSAsesor,
+        SUM(T_PRE.SALDO_PRES) AS Cartera,
+        SUM(CASE WHEN T_PRE.DIAS_REALES >= 9 THEN T_PRE.SALDO_PRES ELSE 0 END) AS Mora9,
+        SUM(CASE WHEN T_PRE.DIAS_REALES >= 31 THEN T_PRE.SALDO_PRES ELSE 0 END) AS Mora31,
+        SUM(CASE WHEN T_PRE.DIAS_REALES >= 151 THEN T_PRE.SALDO_PRES ELSE 0 END) AS Mora150
+    FROM PREEC T_PRE
+    INNER JOIN SEGURIDAD.DBO.ANAREC T_ANA ON T_ANA.ID_ANAREC = T_PRE.ID_ANA AND T_ANA.FLAG_ANAREC = 'A'
+    WHERE T_PRE.PERIODO = :periodo GROUP BY T_PRE.PERIODO, T_ANA.ID_USER
+),
+CTE_DURACION AS (
+    SELECT T_PRE.PERIODO, T_ANA.ID_USER AS IdSAsesor, SUM(T_DED.CAPITAL) AS Varios
+    FROM PRESTAMO T_PTM
+    INNER JOIN PREEC T_PRE ON T_PRE.CUENTA = T_PTM.CUENTA AND T_PRE.OTORGA = T_PTM.OTORGA AND T_PRE.PAGARE = T_PTM.PAGARE AND T_PRE.PERIODO = :periodo
+    INNER JOIN SEGURIDAD.dbo.ANAREC T_ANA ON T_ANA.ID_ANAREC = T_PRE.ID_ANA AND T_ANA.FLAG_ANAREC = 'A'
+    INNER JOIN PRE_DEDUCESOLI T_DED ON T_PTM.PAGARE = T_DED.NRO_SOL AND GLOSA = 'Cursos-Capacitación'
+    WHERE T_PTM.TIPO_PROD <> '52' AND FORMAT(T_PTM.OTORGA, 'yyyyMM') = :periodo GROUP BY T_PRE.PERIODO, T_ANA.ID_USER
+),
+CTE_TEA AS (
+    SELECT T_PRE.PERIODO, T_ANA.ID_USER AS IdSAsesor, SUM(T_PTM.MONTO_PRESTAMO * T_PTM.TEA_INTERES) / NULLIF(SUM(T_PTM.MONTO_PRESTAMO), 0) AS TEA
+    FROM PRESTAMO T_PTM
+    INNER JOIN PREEC T_PRE ON T_PRE.CUENTA = T_PTM.CUENTA AND T_PRE.OTORGA = T_PTM.OTORGA AND T_PRE.PAGARE = T_PTM.PAGARE AND T_PRE.PERIODO = :periodo
+    INNER JOIN SEGURIDAD.dbo.ANAREC T_ANA ON T_ANA.ID_ANAREC = T_PRE.ID_ANA AND T_ANA.FLAG_ANAREC = 'A'
+    WHERE T_PTM.TIPO_PROD <> '52' AND FORMAT(T_PTM.OTORGA, 'yyyyMM') = :periodo GROUP BY T_PRE.PERIODO, T_ANA.ID_USER
+),
 CTE_SOCIOS AS (
---- ======================
-
-SELECT * FROM gc_socios
-
---- ======================
+    SELECT T_PRE.PERIODO, T_ANA.ID_USER AS IdSAsesor, COUNT(DISTINCT T_PRE.CUENTA) AS NroSocios
+    FROM PREEC T_PRE
+    INNER JOIN SEGURIDAD.DBO.ANAREC T_ANA ON T_ANA.ID_ANAREC = T_PRE.ID_ANA AND T_ANA.FLAG_ANAREC = 'A'
+    WHERE T_PRE.PERIODO = :periodo AND T_PRE.SALDO_PRES > 0 GROUP BY T_PRE.PERIODO, T_ANA.ID_USER
 )
---- ======================
-
-
---- ######################
---- MAIN
---- ######################
-
-------
-SELECT
-------
-    T_CAR.Periodo,
-	T_ASE.IdSAgencia,
-    T_CAR.IdSAsesor,
-    T_CAR.Cartera,
-    T_CAR.Mora9,
-    T_CAR.Mora31,
-    T_CAR.Mora150,
-    ISNULL(T_DUR.Varios, 0) AS Varios,
-    ISNULL(T_TEA.TEA, 0) AS TEA,
-    T_SOC.NroSocios,
-    T_SOC.NroSociosAnterior
-------
-FROM
-------
-	CTE_ASESOR T_ASE
-	INNER JOIN CTE_CARTERA_MORAS T_CAR
-		ON  T_CAR.IdSAsesor = T_ASE.IdSAsesor
-    LEFT JOIN CTE_DURACION T_DUR
-        ON  T_DUR.Periodo = T_CAR.Periodo
-        AND T_DUR.IdSAsesor = T_CAR.IdSAsesor
-    LEFT JOIN CTE_TEA T_TEA
-        ON  T_TEA.Periodo = T_CAR.Periodo
-        AND T_TEA.IdSAsesor = T_CAR.IdSAsesor
-    LEFT JOIN CTE_SOCIOS T_SOC
-        ON  T_SOC.Periodo = T_CAR.Periodo
-        AND T_SOC.IdSAsesor = T_CAR.IdSAsesor
---------
-ORDER BY
---------
-    T_CAR.Periodo ASC,
-    T_ASE.IdSAgencia ASC,
-    T_CAR.IdSAsesor ASC
-------
-;
+SELECT T_CAR.PERIODO AS Periodo, T_ASE.IdSAgencia, T_CAR.IdSAsesor, T_CAR.Cartera, T_CAR.Mora9, T_CAR.Mora31, T_CAR.Mora150,
+    ISNULL(T_DUR.Varios, 0) AS Varios, ISNULL(T_TEA.TEA, 0) AS TEA, T_SOC.NroSocios
+FROM CTE_CARTERA_MORAS T_CAR
+INNER JOIN CTE_ASESOR T_ASE ON T_ASE.IdSAsesor = T_CAR.IdSAsesor
+LEFT JOIN CTE_DURACION T_DUR ON T_DUR.IdSAsesor = T_CAR.IdSAsesor
+LEFT JOIN CTE_TEA T_TEA ON T_TEA.IdSAsesor = T_CAR.IdSAsesor
+LEFT JOIN CTE_SOCIOS T_SOC ON T_SOC.IdSAsesor = T_CAR.IdSAsesor;

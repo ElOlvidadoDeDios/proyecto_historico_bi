@@ -122,6 +122,28 @@ def pipeline(
     loader.run(df=df_transformed, table=cfg.table)
 
 
+def pipeline(
+    domain: Domain,
+    subject: SubjectStrategic | SubjectOperational,
+    variant: Variant,
+    periodo: str = None,
+) -> None:
+    try:
+        cfg: ConfigSubject = SUBJECTS[domain][subject]
+    except KeyError as e:
+        raise KeyError(f"Error: {e}")
+
+    params = {"periodo": periodo} if periodo else None
+    df_extracted = Extractor.run(cfg.sql, params=params)
+
+    transform = _get_transformer(cfg.transformer_key)
+    df_transformed = transform(df_extracted)
+
+    loader = LoaderFactory.get_loader("strategic")
+    loader.strategy = STRATEGY_BY_VARIANT[variant]
+    loader.run(df=df_transformed, table=cfg.table)
+
+
 # 3. Crea una nueva función orquestadora para la carga histórica
 def pipeline_historical(periodo: str) -> None:
     pipeline("strategic", "dim_asesor", Variant.VARIATIONAL, periodo)

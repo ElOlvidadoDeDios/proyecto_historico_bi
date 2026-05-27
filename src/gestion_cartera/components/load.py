@@ -55,12 +55,8 @@ class LoaderStrategicVariational(StrategyLoaderStrategic):
     def run(cls, df: pd.DataFrame, table: str):
         # 1. Obtenemos el periodo o periodos EXACTOS que vienen en los datos
         if "Periodo" not in df.columns:
-            raise ValueError(
-                f"Falta la columna 'Periodo' en el DataFrame para actualizar la tabla {table}."
-            )
-
+            raise ValueError(f"Falta la columna 'Periodo' en {table}.")
         periodos_en_datos = df["Periodo"].unique()
-
         with cls.engine.begin() as conn:
             # 2. Borramos SOLO los meses que estamos a punto de insertar (evita duplicados)
             for periodo in periodos_en_datos:

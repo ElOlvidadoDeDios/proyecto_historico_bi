@@ -1,101 +1,36 @@
---- ######################
---- NOTAS
---- ######################
-
---- ######################
---- PREAMBULO
---- ######################
-
---- **********************
---- CTEs
-WITH
---- **********************
-
-
---- ======================
+WITH CTE_ASESORES AS (
+    SELECT DISTINCT T_ANA.ID_AGE AS IdSAgencia, T_ANA.ID_USER AS IdSAsesor
+    FROM PREEC T_PRE
+    INNER JOIN SEGURIDAD.DBO.ANAREC T_ANA ON T_ANA.ID_ANAREC = T_PRE.ID_ANA AND T_ANA.FLAG_ANAREC = 'A'
+    WHERE T_PRE.PERIODO = :periodo AND T_PRE.SALDO_PRES > 0
+),
+CTE_COLOCACION AS (
+    SELECT CAST(T_PTM.OTORGA AS DATE) AS Fecha, T_USU.ID_USER AS IdSAsesor, COUNT(T_PTM.PAGARE) AS ColocacionNumReal, SUM(T_PTM.MONTO_PRESTAMO) AS ColocacionMontoReal
+    FROM PRESTAMO T_PTM
+    INNER JOIN PREEC T_PRE ON T_PRE.CUENTA = T_PTM.CUENTA AND T_PRE.OTORGA = T_PTM.OTORGA AND T_PRE.PAGARE = T_PTM.PAGARE AND T_PRE.PERIODO = :periodo
+    INNER JOIN SEGURIDAD.dbo.ANAREC T_ANA ON T_ANA.ID_ANAREC = T_PRE.ID_ANA AND T_ANA.FLAG_ANAREC = 'A'
+    INNER JOIN SEGURIDAD.dbo.USUARIOS T_USU ON T_USU.ID_USER = T_ANA.ID_USER
+    WHERE T_PTM.TIPO_PROD <> '52' AND FORMAT(T_PTM.OTORGA, 'yyyyMM') = :periodo
+    GROUP BY CAST(T_PTM.OTORGA AS DATE), T_USU.ID_USER
+),
+CTE_REPAGO AS (
+    SELECT CAST(T_MOV.FECHA_MOV AS DATE) AS Fecha, T_USU.ID_USER AS IdSAsesor, SUM(T_MOV.CAPITAL) AS RepagoReal
+    FROM PREMOV T_MOV
+    INNER JOIN PREEC T_PRE ON T_PRE.CUENTA = T_MOV.CUENTA AND T_PRE.OTORGA = T_MOV.OTORGA AND T_PRE.PAGARE = T_MOV.PAGARE AND T_PRE.PERIODO = :periodo
+    INNER JOIN SEGURIDAD.dbo.ANAREC T_ANA ON T_ANA.ID_ANAREC = T_PRE.ID_ANA AND T_ANA.FLAG_ANAREC = 'A'
+    INNER JOIN SEGURIDAD.dbo.USUARIOS T_USU ON T_USU.ID_USER = T_ANA.ID_USER
+    WHERE FORMAT(T_MOV.FECHA_MOV, 'yyyyMM') = :periodo AND T_MOV.TIPO_MOV != '0001' AND T_MOV.TIPO_DOC IN ('01','03')
+    GROUP BY CAST(T_MOV.FECHA_MOV AS DATE), T_USU.ID_USER
+),
 CTE_FECHAS AS (
---- ======================
-
-SELECT DISTINCT
-	T.Fecha,
-	1 AS Llave
-FROM
-	gc_repago T
-
---- ======================
-)
-,
---- ======================
-
---- ======================
-CTE_ASESORES AS (
---- ======================
-
-SELECT DISTINCT
-	T.IdSAgencia,
-	T.IdSAsesor,
-	1 AS Llave
-FROM
-	gc_dim_asesor T
-
---- ======================
-)
-,
---- ======================
-
---- ======================
+    SELECT DISTINCT Fecha FROM CTE_REPAGO
+),
 CTE_PRODUCTO_CARTESIANO AS (
---- ======================
-
-SELECT
-    T_FEC.Fecha,
-    T_ASE.IdSAsesor,
-    T_ASE.IdSAgencia
-FROM
-	CTE_FECHAS T_FEC
-    CROSS JOIN CTE_ASESORES T_ASE
-
---- ======================
+    SELECT T_FEC.Fecha, T_ASE.IdSAsesor, T_ASE.IdSAgencia FROM CTE_FECHAS T_FEC CROSS JOIN CTE_ASESORES T_ASE
 )
---- ======================
-
-
---- ######################
---- MAIN
---- ######################
-
-
---------
 SELECT
---------
-    T_PC.Fecha,
-    FORMAT(T_PC.Fecha, 'yyyyMM')            As Periodo,
-    T_PC.IdSAsesor,
-    T_PC.IdSAgencia,
-    ISNULL(T_COL.ColocacionNumReal, 0)   AS ColocacionNumReal,
-    ISNULL(T_COL.ColocacionMontoReal, 0) As ColocacionMontoReal,
-    ISNULL(T_REP.RepagoReal, 0)          As RepagoReal
---------
-FROM
---------
-
---- Fecha x Asesor (y Agencia)
-    CTE_PRODUCTO_CARTESIANO T_PC
-
---- Colocacion: numero y monto
-    LEFT OUTER JOIN gc_colocacion T_COL
-		ON  T_COL.Fecha = T_PC.Fecha
-		AND T_COL.IdSAsesor = T_PC.IdSAsesor
-
---- Repago
-    LEFT OUTER JOIN gc_repago T_REP
-		ON  T_REP.Fecha = T_PC.Fecha
-		AND T_REP.IdSAsesor = T_PC.IdSAsesor
---------
-ORDER BY
---------
-    T_PC.Fecha ASC,
-    T_PC.IdSAgencia ASC,
-    T_PC.IdSAsesor ASC
---------
-;
+    T_PC.Fecha, FORMAT(T_PC.Fecha, 'yyyyMM') AS Periodo, T_PC.IdSAsesor, T_PC.IdSAgencia,
+    ISNULL(T_COL.ColocacionNumReal, 0) AS ColocacionNumReal, ISNULL(T_COL.ColocacionMontoReal, 0) AS ColocacionMontoReal, ISNULL(T_REP.RepagoReal, 0) AS RepagoReal
+FROM CTE_PRODUCTO_CARTESIANO T_PC
+LEFT JOIN CTE_COLOCACION T_COL ON T_COL.Fecha = T_PC.Fecha AND T_COL.IdSAsesor = T_PC.IdSAsesor
+LEFT JOIN CTE_REPAGO T_REP ON T_REP.Fecha = T_PC.Fecha AND T_REP.IdSAsesor = T_PC.IdSAsesor;
