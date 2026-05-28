@@ -45,7 +45,16 @@ class LoaderStrategicInitial(StrategyLoaderStrategic):
 
     @classmethod
     def run(cls, df: pd.DataFrame, table: str):
-        df.to_sql(table, con=cls.engine, if_exists="replace", index=False)
+        # --- NUEVO: Forzar tipo DATE nativo en SQL Server ---
+        dtypes = {}
+        if "Fecha" in df.columns:
+            df["Fecha"] = pd.to_datetime(df["Fecha"]).dt.date
+            from sqlalchemy import Date
+
+            dtypes["Fecha"] = Date()
+        # ----------------------------------------------------
+
+        df.to_sql(table, con=cls.engine, if_exists="replace", index=False, dtype=dtypes)
         cls.engine.dispose()
 
 
@@ -53,20 +62,27 @@ class LoaderStrategicVariational(StrategyLoaderStrategic):
 
     @classmethod
     def run(cls, df: pd.DataFrame, table: str):
-        # 1. Obtenemos el periodo o periodos EXACTOS que vienen en los datos
         if "Periodo" not in df.columns:
             raise ValueError(f"Falta la columna 'Periodo' en {table}.")
         periodos_en_datos = df["Periodo"].unique()
+
+        # --- NUEVO: Forzar tipo DATE nativo en SQL Server ---
+        dtypes = {}
+        if "Fecha" in df.columns:
+            df["Fecha"] = pd.to_datetime(df["Fecha"]).dt.date
+            from sqlalchemy import Date
+
+            dtypes["Fecha"] = Date()
+        # ----------------------------------------------------
+
         with cls.engine.begin() as conn:
-            # 2. Borramos SOLO los meses que estamos a punto de insertar (evita duplicados)
             for periodo in periodos_en_datos:
                 conn.execute(
                     text(f"DELETE FROM {table} WHERE Periodo = :periodo"),
                     {"periodo": str(periodo)},
                 )
 
-            # 3. Insertamos la data (manteniendo intactos los meses anteriores)
-            df.to_sql(table, con=conn, if_exists="append", index=False)
+            df.to_sql(table, con=conn, if_exists="append", index=False, dtype=dtypes)
 
 
 # Contextos

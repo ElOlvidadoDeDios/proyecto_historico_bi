@@ -121,13 +121,6 @@ def pipeline(
     loader.strategy = STRATEGY_BY_VARIANT[variant]
     loader.run(df=df_transformed, table=cfg.table)
 
-
-def pipeline(
-    domain: Domain,
-    subject: SubjectStrategic | SubjectOperational,
-    variant: Variant,
-    periodo: str = None,
-) -> None:
     try:
         cfg: ConfigSubject = SUBJECTS[domain][subject]
     except KeyError as e:
