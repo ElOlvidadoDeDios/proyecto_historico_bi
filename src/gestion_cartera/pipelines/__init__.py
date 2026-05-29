@@ -144,10 +144,10 @@ def pipeline_historical(periodo: str) -> None:
     pipeline("strategic", "fct_flow", Variant.VARIATIONAL, periodo)
 
 
-def pipeline_initial() -> None:
-    pipeline("strategic", "dim_asesor", Variant.INITIAL)
-    pipeline("strategic", "fct_stock", Variant.INITIAL)
-    pipeline("strategic", "fct_flow", Variant.INITIAL)
+def pipeline_initial(periodo: str) -> None:
+    pipeline("strategic", "dim_asesor", Variant.INITIAL, periodo)
+    pipeline("strategic", "fct_stock", Variant.INITIAL, periodo)
+    pipeline("strategic", "fct_flow", Variant.INITIAL, periodo)
 
 
 def pipeline_variational() -> None:
