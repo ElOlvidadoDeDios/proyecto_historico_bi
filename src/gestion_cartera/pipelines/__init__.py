@@ -108,30 +108,15 @@ def pipeline(
             f"No existe SUBJECT '{subject}' bajo dominio '{domain}'. Disponibles: {disponibles}"
         ) from e
 
-    # 2. PREPARA Y PASA EL PARÁMETRO AL EXTRACTOR
+    # 1. Extracción pura desde el Core Crediticio
     params = {"periodo": periodo} if periodo else None
     df_extracted = Extractor.run(cfg.sql, params=params)
 
-    # Transform
+    # 2. Transformación de Datos y Homologación de Asesores
     transform = _get_transformer(cfg.transformer_key)
     df_transformed = transform(df_extracted)
 
-    # Load
-    loader = LoaderFactory.get_loader("strategic")
-    loader.strategy = STRATEGY_BY_VARIANT[variant]
-    loader.run(df=df_transformed, table=cfg.table)
-
-    try:
-        cfg: ConfigSubject = SUBJECTS[domain][subject]
-    except KeyError as e:
-        raise KeyError(f"Error: {e}")
-
-    params = {"periodo": periodo} if periodo else None
-    df_extracted = Extractor.run(cfg.sql, params=params)
-
-    transform = _get_transformer(cfg.transformer_key)
-    df_transformed = transform(df_extracted)
-
+    # 3. Carga limpia hacia el DataMart Local de Pruebas
     loader = LoaderFactory.get_loader("strategic")
     loader.strategy = STRATEGY_BY_VARIANT[variant]
     loader.run(df=df_transformed, table=cfg.table)
