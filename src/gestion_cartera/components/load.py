@@ -4,12 +4,12 @@ from gestion_cartera.core.utils import DatabaseConnection
 from sqlalchemy import text
 from enum import Enum
 from typing import Literal
-
+from sqlalchemy.types import Date  # <-- Importación centralizada para todo el archivo
 from gestion_cartera.core.config import ConfigManager
 from datetime import date
 
 
-# Producto
+# Producto Base
 class Loader(ABC):
 
     @abstractmethod
@@ -17,7 +17,7 @@ class Loader(ABC):
         pass
 
 
-# Estrategias
+# Estrategias Base
 
 
 class StrategyLoaderStrategic(Loader, ABC):
@@ -31,28 +31,24 @@ class StrategyLoaderStrategic(Loader, ABC):
 
 class StrategyLoaderOperational(Loader, ABC):
 
-    # TODO Especificar especifica obtencion de 'engine'
-
+    # NOTA: Especificar obtención de 'engine' cuando se implemente la capa operativa
     @classmethod
     def run(cls, df: pd.DataFrame, table: str):
         pass
 
 
-# Productos/Estrategias concretas
+# Productos/Estrategias Concretas
 
 
 class LoaderStrategicInitial(StrategyLoaderStrategic):
 
     @classmethod
     def run(cls, df: pd.DataFrame, table: str):
-        # --- NUEVO: Forzar tipo DATE nativo en SQL Server ---
         dtypes = {}
+        # Forzar tipo DATE nativo en SQL Server sin horas
         if "Fecha" in df.columns:
             df["Fecha"] = pd.to_datetime(df["Fecha"]).dt.date
-            from sqlalchemy import Date
-
             dtypes["Fecha"] = Date()
-        # ----------------------------------------------------
 
         df.to_sql(table, con=cls.engine, if_exists="replace", index=False, dtype=dtypes)
         cls.engine.dispose()
@@ -64,16 +60,14 @@ class LoaderStrategicVariational(StrategyLoaderStrategic):
     def run(cls, df: pd.DataFrame, table: str):
         if "Periodo" not in df.columns:
             raise ValueError(f"Falta la columna 'Periodo' en {table}.")
+
         periodos_en_datos = df["Periodo"].unique()
 
-        # --- NUEVO: Forzar tipo DATE nativo en SQL Server ---
         dtypes = {}
+        # Forzar tipo DATE nativo en SQL Server sin horas
         if "Fecha" in df.columns:
             df["Fecha"] = pd.to_datetime(df["Fecha"]).dt.date
-            from sqlalchemy import Date
-
             dtypes["Fecha"] = Date()
-        # ----------------------------------------------------
 
         with cls.engine.begin() as conn:
             for periodo in periodos_en_datos:
@@ -85,9 +79,14 @@ class LoaderStrategicVariational(StrategyLoaderStrategic):
             df.to_sql(table, con=conn, if_exists="append", index=False, dtype=dtypes)
 
 
-# Contextos
+# Contexto para el Datamart Operativo (Placeholder estructural)
+class LoaderOperational(StrategyLoaderOperational):
+    @classmethod
+    def run(cls, df: pd.DataFrame, table: str):
+        pass
 
 
+# Contexto Dinámico Estratégico
 class LoaderStrategic(StrategyLoaderStrategic):
 
     def __init__(self, strategy: StrategyLoaderStrategic | None = None) -> None:
@@ -105,10 +104,8 @@ class LoaderStrategic(StrategyLoaderStrategic):
         return self.strategy.run(df, table)
 
 
-# Factory
-
-
-class BIType(Enum):  # Types of business intelligence
+# Factory de BI
+class BIType(Enum):
     strategic = "strategic"
     operational = "operational"
 
@@ -125,9 +122,3 @@ class LoaderFactory:
             return LoaderStrategic()
         elif bi_type is BIType.operational:
             return LoaderOperational()
-
-
-if __name__ == "__main__":
-    loader_strategic = LoaderFactory.get_loader("strategic")
-    loader_strategic.strategy = LoaderStrategicVariational
-    loader_strategic.run(df, ConfigManager.table.fct.stock)
