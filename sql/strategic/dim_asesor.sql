@@ -1,12 +1,10 @@
 WITH CTE_AUX_ASESOR AS (
     SELECT
         T_PRE.PERIODO AS Periodo,
-        CASE
-            WHEN T_ANA.ID_AGE = '98' THEN
-                CASE WHEN RIGHT(RTRIM(T_ANA.ID_USER), 1) = '6' THEN '06' WHEN RIGHT(RTRIM(T_ANA.ID_USER), 1) = '7' THEN '07' END
-            WHEN T_ANA.ID_AGE = '01' THEN
-                CASE WHEN RIGHT(RTRIM(T_ANA.ID_USER), 1) <> '9' THEN '01' WHEN RIGHT(RTRIM(T_ANA.ID_USER), 1) = '9' THEN '09' END
-            ELSE T_ANA.ID_AGE
+        CASE 
+            WHEN T_ANA.ID_AGE = '98' AND RIGHT(RTRIM(T_ANA.ID_USER), 1) = '6' THEN '06'
+            WHEN T_ANA.ID_AGE = '98' AND RIGHT(RTRIM(T_ANA.ID_USER), 1) = '7' THEN '07'
+            ELSE T_ANA.ID_AGE 
         END AS IdSAgencia,
         T_ANA.ID_USER AS IdSAsesor,
         T_PER.RAZON AS AsesorNombresApellidos,
